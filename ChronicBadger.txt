@@ -1,0 +1,196 @@
+#!/bin/bash
+###Authored by EnikFeirgraw for reason. Special thanks to pgbadger team, for creating awesomeness###
+
+##Display Logo
+logo () {
+cat <<'endmsg'
+              CHRONIC BADGER
+                ___,,___
+           _,-='=- =-  -`"--.__,,.._
+        ,-;// /  - -       -   -= - "=.
+      ,'///    -     -   -   =  - ==-=\`.
+     |/// /  =    `. - =   == - =.=_,,._ `=/|
+    ///    -   -    \  - - = ,ndDMHHMM/\b  \\
+  ,' - / /        / /\ =  - /MM(,,._`YQMML  `|
+ <_,=^Kkm / / / / ///H|wnWWdMKKK#""-;. `"0\  |
+        `""QkmmmmmnWMMM\""WHMKKMM\   `--. \> \
+ hjm          `""'  `->>>    ``WHMb,.    `-_<@)
+                                `"QMM`.
+                                   `>>>
+endmsg
+}
+
+##Functions
+
+#Functions for menu calls
+Main () {
+        menu=$(whiptail --backtitle "ChronicBadger" --title "Main Menu" --menu " Servers: ${serversPicked[*]} \nStart: $startTime \nEnd:   $endTime \nOutput: $outputFolder \nName: $fileName" 18 90 6 \
+        Servers "Select servers to badger" \
+        Start "Enter start date and time for parsing" \
+        End "Enter end date and time for parsing" \
+        Output "Enter location for file output" \
+        Name "Type a name for your output file" \
+        Badger "Execute the Badger Process!" 3>&1 1>&2 2>&3)
+}
+Servers () {
+        serverDisplay='whiptail --backtitle "ChronicBadger" --title "Main Menu" --checklist --separate-output "" 12 30 ${#server[@] '
+        for i in ${server[*]}
+        do
+        serverDisplay="$serverDisplay \ $i \"\" off "
+        done
+        serverDisplay="$serverDisplay 3>&1 1>&2 2>&3"
+        serversPicked=($(eval $serverDisplay))
+        menu=Main
+}
+Start () {
+        startTime=$(whiptail --backtitle "ChronicBadger" --title "Start Time" --inputbox " Enter date AND time, in the following format: \nYYYY-MM-DD HH:MM:SS" 12 80 "$startTime" 3>&1 1>&2 2>&3)
+        menu=Main
+}
+End () {
+        endTime=$(whiptail --backtitle "ChronicBadger" --title "End Time" --inputbox " Enter date AND time, in the following format: \nYYYY-MM-DD HH:MM:SS" 12 80 "$endTime" 3>&1 1>&2 2>&3)
+        menu=Main
+}
+Output () {
+        outputFolder=$(whiptail --backtitle "ChronicBadger" --title "Output Folder" --inputbox "Enter desired location of output file" 8 80 $outputFolder 3>&1 1>&2 2>3&)
+        menu=Main
+}
+Name () {
+        fileName=$(whiptail --backtitle "ChronicBadger" --title "File Name" --inputbox "Enter desired name of output file" 8 80 $fileName 3>&1 1>&2 2>&3)
+        menu=Main
+}
+
+#Calls the help menu
+helpMenu () {
+cat<<'endmsg'
+This is not the way you badger!
+
+Usage case is as follow:
+-t or --today           Creates logs for 0000 hours to current time today
+-y or --yesterday       Creates logs for 0000 hours yesterday to 0000 hours today
+-w or --weekly          Updates the 7 day rolling log
+-m or --monthly         Updates the 30 day rolling log
+-s or --squish          Squishes the logs over 2 days old with .gz compression
+-h or --hide            Archives already compressed logs that are older than 30 days
+-v or --version         Shows ChronicBadger version... With colors!
+
+Examples:
+/opt/chronicbadger --today
+/opt/chronicbadger -w
+
+endmsg
+}
+
+#Functions for primary badger calls.
+Badger () {
+        clear
+        logo
+        echo && echo "Badgering custom logs"
+        for i in ${serversPicked[@]}
+        do
+        echo && echo "Badgering logs for... $i" && pgbadger -f stderr -m 2048 -b "$startTime" -e "$endTime" -T "$i" -o $i\_$fileName.html -O $outputFolder/ $logs/$i/*
+        echo "Report Location: $outputFolder/${i}_${fileName}.html"
+        done
+        echo
+        exit 0
+}
+badgerCMD () { #Arguments exist as follows: $1 is Start Date, $2 is End Date, $3 is directory to place logs
+        echo && echo "Badgering logs for $3"
+        for i in ${server[@]}
+        do
+        echo && echo "Badgering logs for... $i" && pgbadger -f stderr -m 2048 -b "`date --date="$1" "+%Y-%m-%d %H:%M:%S"`" -e "`date --date="$2" "+%Y-%m-%d %H:%M:%S"`" -T "$i $3" -o $1.html -O $html/$3/ $logs/$i/*
+        done
+}
+badgerSquish () {
+        for i in ${server[@]}
+        do
+        echo && echo "Badger is squishing logs for $i" && echo && sleep 2 && find $logs/$i/ -type f -name "*.log" -mtime +2 -print -exec gzip {} \;
+        done
+}
+badgerHide () {
+        for i in ${server[@]}
+        do
+        echo && echo "Badger is archiving any logs 30 days old for $i" && echo && sleep 2 && cd $logs/$i/ && find -type f -name "*.gz" -mtime +30 -exec tar --remove-files -uvf archive.tar {} \;
+        done
+}
+
+##Variables and Arrays
+#Change these variables
+devel=(devel1 devel2 devel3 devel4) #Array to hold development servers
+prod=(prod1 prod2 prod3 prod4) #Array for production server. Use this and devel to hold the hostnames of your servers
+html=/var/www/html #path to where you want to host badger logs. Default apache location provided (RHEL 6.x)
+logs=/var/logs/postgres #This holds the path to your postgres logs being stored. Protip: store all postgres server logs on an easily accessed network drive
+
+#Don't change these variable
+menu=Main
+startTime=$(date --date='yesterday 0' '+%Y-%m-%d %H:%M:%S')
+endTime=$(date '+%Y-%m-%d %H:%M:%S')
+
+#Change these if you want to set your defaults
+fileName=custombadger
+outputFolder=/var/www/html/custom
+
+##Badger knows his way!! - Logic for determining currently network Badger is running on
+if [[ `hostname -s` =~ "prod" ]]; then server=(${prod[@]})
+elif [[ `hostname -s` =~ "devel" ]] || [[ `hostname -s` =~ "test" ]]; then server=(${devel[@]})
+fi
+serversPicked=(${server[@]})
+
+##Menu Invokation
+while [ $# -eq 0 ]
+do
+        $menu
+        if [ $? -eq 1 ]; then #This allows the cancel button to exit the program
+        exit 0
+        fi
+done
+
+##Main Script
+#For loop to gather all arguments
+for arg in "$@"
+do
+#Case Switching
+        case $arg in
+
+#Today Logs
+                --[Tt]oday|-t)
+badgerCMD 'today 0' now today
+;;
+
+#Yesterday Logs
+                --[Yy]esterday|-t)
+badgerCMD 'yesterday 0' 'today 0' yesterday
+;;
+
+#Weekly Logs
+                --[Ww]eekly|-w)
+badgerCMD '7 days ago 0' now weekly
+;;
+
+#Monthly Logs
+                --[Mm]onthly|-m)
+badgerCMD '30 days ago 0' now monthly
+;;
+
+#Compress Logs
+                --[Ss]quish|-s)
+badgerSquish
+;;
+
+#Archive Logs
+                --[Hh]ide|-h)
+badgerHide
+;;
+
+#Calls ChronicBadger Version. Color
+                --[Vv]ersion|-v)
+echo
+echo "`tput setaf 6`ChronicBadger `tput setaf 5`Version 2.00: `tput setaf 6`Badger evolved!`tput sgro0`"
+echo
+;;
+
+#Any other option used
+*)
+logo
+helpMenu
+esac
+done
