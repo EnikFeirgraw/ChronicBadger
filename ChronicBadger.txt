@@ -1,5 +1,5 @@
 #!/bin/bash
-###Authored by EnikFeirgraw for reason. Special thanks to pgbadger team, for creating awesomeness###
+###Authored by EnikFeirgraw for reasons. Special thanks to pgbadger team, for creating awesomeness and ASCII logo from somewhere on the internet###
 
 ##Display Logo
 logo () {
